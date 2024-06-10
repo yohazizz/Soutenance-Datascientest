@@ -1,0 +1,169 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Jan 22 21:07:53 2024
+
+@author: azizb
+"""
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
+#Intro
+
+st.title("Rapport de projet")
+st.header("Création d’un système de Recommandation de film")
+
+st.subheader("Table des matières")
+st.markdown("""
+1. [Introduction](#introduction)
+2. [Récupération et mise en forme des données](#récupération-et-mise-en-forme-des-données)
+3. [Visualisation](#visualisation)
+4. [Exploitation des données](#exploitation-des-données)
+5. [Présentation des différentes approches](#présentation-des-différentes-approches)
+6. [Modélisation et résultats](#modélisation-et-résultats)
+7. [Conclusion](#conclusion)
+""")
+
+st.markdown("## Introduction")
+st.write("""
+La finalité de ce projet vise à proposer un système de recommandation de film
+adapté au forme actuelle d’évaluation des films et persistant dans le temps.
+Ce système est mis en place grâce à l’application de collaborative filtering. C’est
+une technique qui permet de filtrer les films qu’un utilisateur pourrait aimer en se
+basant sur les réactions d’autres utilisateurs ayant des caractéristiques similaires.
+Pour pouvoir être en mesure de construire un tel système, nous allons avoir besoin
+de définir la similarité entre les utilisateurs et de trouver une méthode permettant
+d’extraire une évaluation de ces similarités. Nous pourrons ensuite appliquer cette
+méthode aux nouveaux utilisateurs.
+
+Deux jeux de données sont à disposition nous permettant d’initier le projet, l’un
+provient de Movielens et l’autre de IMDB. Eventuellement, l’usage de web
+scrapping sur les bases de données que nous construirons pourrait être utiliser
+pour consolider et maintenir à jour les données nécessaires au système de
+recommandation.
+
+Une exploration plus complète des jeux de données nous mènera à utiliser des
+méthodes plus complexes avec une approche de filtrage basé sur le contenu. Nous
+disposons de données sur des caractéristiques précise concernant différents films,
+nous pouvons établir des similarités sur les films en eux même en fonction de leurs
+caractéristiques. Cette méthode peut complémenter l’usage de collaborative
+filtering et améliorer la précision du système. Il existe différentes techniques de
+filtrage basé sur le contenu, nous allons explorer l’application d’algorithme de
+réseau de neurone.
+
+En résumé, le projet consiste à créer un système de recommandation de films
+grâce à :
+- L’application de collaborative filtering ;
+- La consolidation d’un jeu de données par web scraping (Si nécessaire) ;
+- L’application d’algos de Deep Learning.
+
+Les bases de données à disposition (liens ci-dessous) :
+- [Movielens](https://grouplens.org/datasets/movielens/20m/)
+- [IMDB](https://www.imdb.com/interfaces/)
+""")
+
+st.markdown("## Récupération et mise en forme des données")
+st.markdown("## Visualisation")
+st.markdown("## Exploitation des données")
+st.markdown("## Présentation des différentes approches")
+st.markdown("## Modélisation et résultats")
+st.markdown("## Conclusion")
+
+# Chargement des données
+@st.cache_data
+def load_data():
+    genome_scores = 'C:/Users/azizb/Desktop/Datatsets projet/ml-20m/ml-20m/genome-scores.csv'
+    genome_tags = 'C:/Users/azizb/Desktop/Datatsets projet/ml-20m/ml-20m/genome-tags.csv'
+    links = 'C:/Users/azizb/Desktop/Datatsets projet/ml-20m/ml-20m/links.csv'
+    movies = 'C:/Users/azizb/Desktop/Datatsets projet/ml-20m/ml-20m/movies.csv'
+    ratings = 'C:/Users/azizb/Desktop/Datatsets projet/ml-20m/ml-20m/ratings.csv'
+    tags = 'C:/Users/azizb/Desktop/Datatsets projet/ml-20m/ml-20m/tags.csv'
+
+    gs = pd.read_csv(genome_scores)
+    gt = pd.read_csv(genome_tags)
+    links = pd.read_csv(links)
+    movies = pd.read_csv(movies)
+    ratings = pd.read_csv(ratings)
+    tags = pd.read_csv(tags)
+
+    return gs, gt, links, movies, ratings, tags
+
+gs, gt, links, movies, ratings, tags = load_data()
+
+# Fusion et transformation des données
+df_g = pd.merge(gt, gs, on='tagId', how='inner')
+df_g['movieId'] = df_g['movieId'].astype(str)
+indices_max_relevance = df_g.groupby(['movieId'])['relevance'].idxmax()
+df_g_result = df_g.loc[indices_max_relevance]
+df_g_result['movieId'] = df_g_result['movieId'].astype(int)
+df_movies = pd.merge(df_g_result, movies, on='movieId', how='right')
+
+ratings_copy = ratings.copy()
+nombre_entrees_a_conserver = int(len(ratings) / 10)
+indices_a_conserver = np.random.choice(ratings.index, size=nombre_entrees_a_conserver, replace=False)
+ratings_reduit = ratings_copy.loc[indices_a_conserver]
+df = pd.merge(ratings_reduit, df_movies, on='movieId', how='left')
+df = df.dropna()
+
+unique_genres = ['Comedy', 'Action', 'Crime', 'Drama', 'Mystery', 'Adventure', 'Musical', 'Documentary', 'IMAX', 'Thriller', 'Sci-Fi', 'Fantasy', 'Horror', 'Romance', 'Animation', 'Children', 'War', 'Western', 'Film Noir', '(no genres listed)']
+df['genres'] = df['genres'].str.split('|')
+genre_columns = pd.DataFrame(df['genres'].apply(lambda x: [1 if genre in x else 0 for genre in unique_genres]).tolist(), columns=unique_genres, index=df.index)
+df = pd.concat([df, genre_columns], axis=1)
+df = df.drop('genres', axis=1)
+
+# Configuration de la page Streamlit
+st.title("Data Visualisation de Films")
+st.sidebar.title("Sommaire")
+options = st.sidebar.radio("Choisir une visualisation", ['Distribution des genres', 'Distribution des tags', 'Distribution des notations', 'Genres les mieux notés'])
+
+# Fonction pour afficher les graphiques
+def plot_genre_distribution():
+    genre_counts = df[unique_genres].sum().sort_values(ascending=False)
+    plt.figure(figsize=(12, 8))
+    sns.barplot(x=genre_counts.values, y=genre_counts.index, palette='muted')
+    plt.title('Distribution des genres de films')
+    plt.xlabel('Nombre de films')
+    plt.ylabel('Genre')
+    st.pyplot(plt)
+
+def plot_tag_distribution():
+    tag_counts = df['tag'].value_counts().head(20)
+    plt.figure(figsize=(12, 8))
+    sns.barplot(x=tag_counts.values, y=tag_counts.index, palette='viridis')
+    plt.title('Distribution des tags de films')
+    plt.xlabel('Nombre de films')
+    plt.ylabel('Tag')
+    st.pyplot(plt)
+
+def plot_ratings_distribution():
+    ratings_distribution = df['rating'].value_counts().sort_index()
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x=ratings_distribution.index, y=ratings_distribution.values, color='skyblue')
+    plt.title('Distribution des notations')
+    plt.xlabel('Note')
+    plt.ylabel('Nombre de films')
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    st.pyplot(plt)
+
+def plot_top_rated_genres():
+    genre_avg_ratings = {genre: df.loc[df[genre] == 1, 'rating'].mean() for genre in unique_genres}
+    genre_avg_ratings_series = pd.Series(genre_avg_ratings).sort_values(ascending=False)
+    plt.figure(figsize=(12, 8))
+    sns.barplot(x=genre_avg_ratings_series.values, y=genre_avg_ratings_series.index, palette='muted')
+    plt.title('Genres les mieux notés en fonction de la moyenne des notes')
+    plt.xlabel('Note moyenne')
+    plt.ylabel('Genre')
+    plt.grid(axis='x', linestyle='--', alpha=0.7)
+    st.pyplot(plt)
+
+# Affichage des graphiques en fonction de la sélection
+if options == 'Distribution des genres':
+    plot_genre_distribution()
+elif options == 'Distribution des tags':
+    plot_tag_distribution()
+elif options == 'Distribution des notations':
+    plot_ratings_distribution()
+elif options == 'Genres les mieux notés':
+    plot_top_rated_genres()
